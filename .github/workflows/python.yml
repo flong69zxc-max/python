@@ -1,0 +1,35 @@
+name: Run Python Script
+
+on:
+  push:
+  workflow_dispatch:  # чтобы можно было запустить вручную
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Забираем твой репозиторий с кодом и прошивкой
+      - uses: actions/checkout@v3
+      
+      # 2. Устанавливаем Python
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      # 3. Устанавливаем зависимости (если нужны)
+      - name: Install dependencies
+        run: |
+          pip install <нужные_пакеты>  # например, если скрипт использует
+      
+      # 4. Запускаем твой скрипт!
+      - name: Run repack script
+        run: |
+          python3 build_transition_full_repack.py firmware.bin -o mts.bin
+      
+      # 5. Сохраняем результат
+      - name: Upload result
+        uses: actions/upload-artifact@v3
+        with:
+          name: mts-output
+          path: mts.bin
