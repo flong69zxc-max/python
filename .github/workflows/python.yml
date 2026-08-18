@@ -3,35 +3,36 @@ name: Build transition firmware
 on:
   push:
     branches: [ "main", "master" ]
-  workflow_dispatch:  # Позволяет запускать вручную
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. Загружаем код из репозитория
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # 2. Устанавливаем Python (скрипт написан на Python 3)
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       
-      # 3. Устанавливаем squashfs-tools (нужны unsquashfs и mksquashfs)
-      - name: Install dependencies
+      # Собираем свежий squashfs-tools из исходников
+      - name: Build squashfs-tools from source
         run: |
           sudo apt-get update
-          sudo apt-get install -y squashfs-tools
+          sudo apt-get install -y build-essential liblzma-dev liblzo2-dev zlib1g-dev
+          git clone https://github.com/plougher/squashfs-tools.git
+          cd squashfs-tools/squashfs-tools
+          make
+          sudo make install
+          unsquashfs -version
       
-      # 4. Запускаем скрипт
       - name: Build transition firmware
         run: |
           python3 build_transition_full_repack.py firmware.bin -o transition_firmware.bin
       
-      # 5. Сохраняем результат как артефакт
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
