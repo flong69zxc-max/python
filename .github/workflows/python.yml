@@ -1,34 +1,39 @@
-name: Run Python Script
+name: Build transition firmware
 
 on:
   push:
-  workflow_dispatch:
+    branches: [ "main", "master" ]
+  workflow_dispatch:  # Позволяет запускать вручную
 
 jobs:
-  run-script:
+  build:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v3
+      # 1. Загружаем код из репозитория
+      - name: Checkout code
+        uses: actions/checkout@v4
       
-      - uses: actions/setup-python@v4
+      # 2. Устанавливаем Python (скрипт написан на Python 3)
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.10'
       
-      # Устанавливаем squashfs-tools (это основное, что нужно скрипту)
+      # 3. Устанавливаем squashfs-tools (нужны unsquashfs и mksquashfs)
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y squashfs-tools
       
-      # Запускаем твой скрипт
-      - name: Run repack script
+      # 4. Запускаем скрипт
+      - name: Build transition firmware
         run: |
-          python3 build_transition_full_repack.py firmware.bin -o mts.bin
+          python3 build_transition_full_repack.py firmware.bin -o transition_firmware.bin
       
-      # Сохраняем результат
-      - name: Upload result
+      # 5. Сохраняем результат как артефакт
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mts-output
-          path: mts.bin
+          name: transition-firmware
+          path: transition_firmware.bin
