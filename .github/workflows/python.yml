@@ -1,56 +1,90 @@
-name: Build transition firmware
+name: Build Transition Firmware
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      firmware_url:
+        description: 'Ссылка на официальную прошивку (необязательно)'
+        required: false
+        type: string
+      keep_workdir:
+        description: 'Сохранять временную папку для отладки'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write          # для создания релизов
+      packages: write
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      
-      - name: Install dependencies
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y squashfs-tools
-      
-      # ПРОСТОЙ СПОСОБ: игнорируем ошибки unsquashfs
-      - name: Build firmware (force mode)
+          sudo apt-get install -y squashfs-tools python3
+
+      - name: Obtain firmware file
+        id: firmware
         run: |
-          # Создаем модифицированный скрипт, который пропускает unsquashfs
-          cat > build_force.py << 'EOF'
-          #!/usr/bin/env python3
-          import hashlib
-          import struct
-          from pathlib import Path
-          
-          SECRET = bytes.fromhex('8cefeb7b3b274629be7df7d453a64c29')
-          FOOTER_MAGIC = bytes.fromhex('00c0ffee')
-          
-          def sign_footer(d: bytes) -> bytes:
-              body = d[:-20]
-              return body + hashlib.md5(SECRET + body).digest() + FOOTER_MAGIC
-          
-          data = Path('firmware.bin').read_bytes()
-          # Просто подписываем и сохраняем
-          output = sign_footer(data)
-          Path('transition_firmware.bin').write_bytes(output)
-          print('Done!')
-          EOF
-          
-          python3 build_force.py
-      
-      - name: Upload artifact
+          if [ -n "${{ github.event.inputs.firmware_url }}" ]; then
+            echo "Downloading firmware from provided URL..."
+            wget -O firmware.bin "${{ github.event.inputs.firmware_url }}"
+          elif [ -f "firmware.bin" ]; then
+            echo "Using firmware.bin from repository"
+          else
+            echo "ERROR: No firmware.bin found and no URL provided."
+            exit 1
+          fi
+          echo "Firmware size: $(stat -c%s firmware.bin) bytes"
+          echo "sha256=$(sha256sum firmware.bin | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Make build script executable
+        run: chmod +x build_transition_full_repack.py
+
+      - name: Run build script
+        id: build
+        run: |
+          KEEP=""
+          if [ "${{ github.event.inputs.keep_workdir }}" == "true" ]; then
+            KEEP="--keep-workdir"
+          fi
+          ./build_transition_full_repack.py firmware.bin -o transition.bin $KEEP
+          echo "Output size: $(stat -c%s transition.bin) bytes"
+          echo "sha256=$(sha256sum transition.bin | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: transition-firmware
-          path: transition_firmware.bin
+          name: DIR-842R7-MTS-Transition-${{ github.run_number }}
+          path: transition.bin
+          if-no-files-found: error
+
+      - name: Upload build logs (if workflow_dispatch)
+        if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build_transition_full_repack.py
+            firmware.bin
+            transition.bin
+          if-no-files-found: warn
+
+      - name: Create release (if tag pushed)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: transition.bin
+          name: Transition Firmware ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
