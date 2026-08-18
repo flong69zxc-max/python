@@ -11,7 +11,7 @@ from pathlib import Path
 
 SECRET = bytes.fromhex('8cefeb7b3b274629be7df7d453a64c29')
 FOOTER_MAGIC = bytes.fromhex('00c0ffee')
-MTS_NAME = 'DIR_842E_RT8197F_MTS'
+MTS_NAME = 'DIR_842R7_RT8197G_MTS'
 
 
 def die(msg: str) -> None:
@@ -63,15 +63,16 @@ def patch_version(root: Path):
     if not version.exists():
         die('/VERSION not found after unsquashfs')
     text = version.read_text(errors='replace')
-    text = text.replace('DIR_842E_RT8197F_MTS', 'DIR_842E_RT8197F')
-    text = text.replace('DIR_842E_RT8197F', 'DIR_842E_RT8197F_MTS')
+    # Replace base name with MTS variant
+    text = text.replace('DIR_842R7_RT8197G', 'DIR_842R7_RT8197G_MTS')
+    text = text.replace('DIR_842R7_RT8197G_MTS', 'DIR_842R7_RT8197G')  # ensure idempotency
     version.write_text(text)
     print('patched /VERSION:')
     print(version.read_text())
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Build MTS-accepted transition firmware from vanilla D-Link DIR-842E cr6b update')
+    ap = argparse.ArgumentParser(description='Build MTS-accepted transition firmware from vanilla D-Link DIR-842R7 cr6b update')
     ap.add_argument('input', help='official D-Link web update .bin')
     ap.add_argument('-o', '--output', required=True, help='output transition .bin')
     ap.add_argument('--keep-workdir', action='store_true')
@@ -104,7 +105,7 @@ def main():
     print(f'compression    : {info["compression"]} (4 means xz)')
     print(f'flags          : 0x{info["flags"]:x}')
 
-    work = Path(args.workdir).resolve() if args.workdir else Path(tempfile.mkdtemp(prefix='dir842-transition-'))
+    work = Path(args.workdir).resolve() if args.workdir else Path(tempfile.mkdtemp(prefix='dir842r7-transition-'))
     work.mkdir(parents=True, exist_ok=True)
     sq_orig = work / 'orig.sqfs'
     sq_new = work / 'new.sqfs'
